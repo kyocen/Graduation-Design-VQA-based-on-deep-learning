@@ -122,12 +122,12 @@ if __name__ == '__main__':
             if i % 180 == 0:  # print every 2000 mini-batches
                 print('[%5d] running_loss(train): %.3f' % (i, running_loss))
                 running_loss = 0.0
-        if epoch % 5 == 0:
-            net.eval()  # Sets the module in evaluation mode. This has any effect only on modules such as Dropout or BatchNorm.
-            train_loss, train_acc = loss_acc(train_loader, net, criterion, "train")
-            eval_loss, eval_acc = loss_acc(eval_loader, net, criterion, "eval")
-            print('[epoch: %d] train_loss: %.4f, valid_loss: %.4f, train_acc: %.4f, valid_acc: %.4f' % (epoch,
-                                                                                                        train_loss,
-                                                                                                        eval_loss,
-                                                                                                        train_acc,
-                                                                                                        eval_acc))
+
+        net.eval()  # Sets the module in evaluation mode. This has any effect only on modules such as Dropout or BatchNorm.
+        train_loss, train_acc = loss_acc(train_loader, net, criterion, "train")
+        eval_loss, eval_acc = loss_acc(eval_loader, net, criterion, "eval")
+        print('[epoch: %d] train_loss: %.4f, valid_loss: %.4f, train_acc: %.4f, valid_acc: %.4f' % (epoch,
+                                                                                                    train_loss,
+                                                                                                    eval_loss,
+                                                                                                    train_acc,
+                                                                                                    eval_acc))
