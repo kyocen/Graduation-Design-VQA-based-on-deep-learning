@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader as Dataloader
 from torchvision import models, transforms
 from torch.autograd import Variable
+from torch.optim.lr_scheduler import *
 
 import os
 import re
@@ -56,7 +57,7 @@ def loss_acc(loader, net, criterion, split):
         correct += correct_batch
         if i % 900 == 0:  # print per 180 batches
             print('[%5d] running_loss(%s): %.3f accuracy(%s): %.3f' % (
-            i, split, loss / num_samples, split, correct / num_samples * 18 * 100))
+                i, split, loss / num_samples, split, correct / num_samples * 18 * 100))
 
     return loss / num_samples, correct / num_samples * 18 * 100
 
@@ -100,12 +101,15 @@ if __name__ == '__main__':
         criterion = nn.BCELoss()
 
     # optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
-    optimizer = optim.Adam(net.parameters(), lr=1e-4, weight_decay=1e-4)
+    optimizer = optim.Adam(net.parameters(), lr=1e-2, weight_decay=1e-4)
+    scheduler = StepLR(optimizer, step_size=5, gamma=1e-3)
     running_loss = 0.0
     print("model prepared!!! train start!!!")
 
-    for epoch in range(100):
+    for epoch in range(50):
         net.train()  # Sets the module in train mode.
+        scheduler.step()
+        running_loss = 0.0
         for i, sample in enumerate(train_loader, 1):
             # sample:[x,y] x:ndarray 2048+300+300d y:int 1/0
             # 一个sample是一个经过处理的batch，2d tensor，sample[i]是所有单个样本第i个的属性的集合：1d tensor，！！把他当做单个样本处理即可！！
@@ -119,15 +123,15 @@ if __name__ == '__main__':
 
             tmp_loss = loss.data[0]
             running_loss += tmp_loss
-            if i % 180 == 0:  # print every 2000 mini-batches
-                print('[%5d] running_loss(train): %.3f' % (i, running_loss))
-                running_loss = 0.0
+            if i % 180 == 0:  # print every 180 batches
+                print('[%5d] running_loss(train): %.3f' % (i, running_loss / i * 100))
 
-        net.eval()  # Sets the module in evaluation mode. This has any effect only on modules such as Dropout or BatchNorm.
-        train_loss, train_acc = loss_acc(train_loader, net, criterion, "train")
-        eval_loss, eval_acc = loss_acc(eval_loader, net, criterion, "eval")
-        print('[epoch: %d] train_loss: %.4f, valid_loss: %.4f, train_acc: %.4f, valid_acc: %.4f' % (epoch,
-                                                                                                    train_loss,
-                                                                                                    eval_loss,
-                                                                                                    train_acc,
-                                                                                                    eval_acc))
+        if epoch % 5 == 0:
+            net.eval()  # Sets the module in evaluation mode. This has any effect only on modules such as Dropout or BatchNorm.
+            train_loss, train_acc = loss_acc(train_loader, net, criterion, "train")
+            eval_loss, eval_acc = loss_acc(eval_loader, net, criterion, "eval")
+            print('[epoch: %d] train_loss: %.4f, valid_loss: %.4f, train_acc: %.4f, valid_acc: %.4f' % (epoch,
+                                                                                                        train_loss,
+                                                                                                        eval_loss,
+                                                                                                        train_acc,
+                                                                                                        eval_acc))
