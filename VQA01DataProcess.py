@@ -16,7 +16,7 @@ def load_feature(path):
     pattern = os.path.join(path, '*.npy')
     for i, filepath in enumerate(glob.glob(pattern), 1):
         feature_batch = np.load(filepath)
-        for key in feature_batch.item():
+        for key in feature_batch.item():#feature_batch.item() is a dict
             dict[key] = feature_batch.item()[key]
     print(len(dict))
 

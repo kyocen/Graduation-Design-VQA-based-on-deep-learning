@@ -1,0 +1,15 @@
+VQA01DataProcess是对数据集的基础的处理，将数据配对
+VQA01ImageProcess 提取图片特征，获得embedding dict
+VQA01dataset 将数据包装成dataset
+VQA01Baseline 用来训练模型并且进行评估
+
+毕设：
+VQA02DataProcess是对数据集的基础的处理，将数据配对包括question_id, question, [answer], image_id, correct_answer
+VQA02getdata是将question处理成2d index matrix, 并选出候选答案和提取word dict，将[answer]处理成answer index->score
+VQA02ImageProcess 提取图片特征到文件
+VQA02dataset 将数据包装成dataset
+CSFMODEL 一整个模型
+modules 要用到的模块，包括MFH，CSF
+resnet resnet源码，和我修改之后的resnet模型
+VQA02train 用来训练模型，得到结果
+

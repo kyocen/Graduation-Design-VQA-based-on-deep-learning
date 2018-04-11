@@ -77,7 +77,7 @@ if __name__ == '__main__':
         batch_size=BATCH_SIZE,
         shuffle=True,
         num_workers=2,
-        pin_memory=True  # If True, the data loader will copy tensors into CUDA pinned memory before returning them
+        pin_memory=True  # If True, the data loader will copy tensors into CUDA pinned memory before returning them, 重要属性是主机的操作系统将不会对这块内存进行分页和交换操作，确保该内存始终驻留在物理内存中。
     )
     eval_loader = torch.utils.data.DataLoader(
         eval_set,

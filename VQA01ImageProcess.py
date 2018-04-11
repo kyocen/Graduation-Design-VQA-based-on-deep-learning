@@ -56,7 +56,7 @@ def get_resnet101_feature(image_dict, f_dict, batchsize):
     filenames = []  # 一个batch中所有图片名字的集合
     dict = {}  # 一个batch中图片名对应feature
     batch_id = 1
-    pattern = os.path.join(image_dict, '*jpg')
+    pattern = os.path.join(image_dict, '*.jpg')
     for i, filepath in enumerate(glob.glob(pattern), 1):
         filenames.append(os.path.basename(filepath))
         im = Image.open(filepath).convert('RGB')  # 将图片转为RBG模式,为啥要转呢？？？？？？？？？？？？？？？？？？？
@@ -72,8 +72,8 @@ def get_resnet101_feature(image_dict, f_dict, batchsize):
             else:
                 output = my_resnet(Variable(batch))
 
-            output = (output.data).cpu().numpy()  # put variable on cpu, transform Variable into numpy array (batchsize,2048)
-            for filename, feature in zip(filenames, output):
+            output = (output.data).cpu().numpy()  # put variable.tensor on cpu, transform tensor into numpy array (batchsize,2048)
+            for filename, feature in zip(filenames, output):#(bs) (bs)
                 dict[filename] = feature
             np.save(os.path.join(f_dict, 'dict_' + str(batch_id)),dict)  # Save an array to a binary file in NumPy .npy format.
             batch_id += 1
