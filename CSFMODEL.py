@@ -23,9 +23,9 @@ stdModule = resnet.resnet152(True)
 
 
 class CSFMODEL(nn.Module):
-    def __init__(self, num_words, num_ans, emb_size=300, inplanes=512 * 4, planes=512, stride=1):
+    def __init__(self, layer, num_words, num_ans, emb_size=300, inplanes=512 * 4, planes=512, stride=1):
         super(CSFMODEL, self).__init__()
-
+        self.layers=layer
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
 
@@ -112,7 +112,8 @@ class CSFMODEL(nn.Module):
 
         # first CSF
         # (bs,512,7,7) (bs,h_size) => (bs,512,7,7)
-        img = self.csf1(img, h)
+        if self.layers>=1 :
+            img = self.csf1(img, h)
 
         # second conv
         img = self.conv2(img)  # [bs,512,7,7]
@@ -120,7 +121,8 @@ class CSFMODEL(nn.Module):
 
         # second CSF
         # (bs,512,7,7) (bs,h_size) => (bs,512,7,7)
-        img = self.csf2(img, h)
+        if self.layers>=2 :
+            img = self.csf2(img, h)
 
         # third conv
         img = self.conv3(img)  # [bs,2048,7,7]
@@ -128,7 +130,8 @@ class CSFMODEL(nn.Module):
 
         # third CSF
         # (bs,2048,7,7) (bs,h_size) => (bs,2048,7,7)
-        img = self.csf3(img, h)
+        if self.layers>=3 :
+            img = self.csf3(img, h)
 
         img = img + origin  # (bs,2048,7,7)
         img = self.relu(img)  # (bs,2048,7,7)

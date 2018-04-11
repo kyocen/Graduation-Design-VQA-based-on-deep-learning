@@ -33,6 +33,7 @@ parser.add_argument("-bs", type=int, action="store", help="BATCH_SIZE", default=
 parser.add_argument("-lr", type=float, action="store", help="learning rate", default=7e-4)
 parser.add_argument("-wd", type=float, action="store", help="weight decay", default=0)
 parser.add_argument("-epoch", type=int, action="store", help="epoch", default=50)
+parser.add_argument("-l", type=int, action="store", help="num of CSF layers", default=3)
 parser.add_argument('--print-freq', '-p', default=2000, type=int, metavar='N', help='print frequency (default: 1000)')
 
 args = parser.parse_args()
@@ -93,7 +94,7 @@ def main():
     logger.debug('[Info] embedding size: {}'.format(emb_size))
 
     # 建立模型
-    model = CSFMODEL(len(train_set.codebook['itow']), len(train_set.codebook['itoa'])+1, emb_size)
+    model = CSFMODEL(args.l, len(train_set.codebook['itow']), len(train_set.codebook['itoa'])+1, emb_size)
 
     total_param = 0
     for param in model.parameters():  # Returns an iterator over module parameters
