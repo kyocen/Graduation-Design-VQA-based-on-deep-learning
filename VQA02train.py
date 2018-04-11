@@ -93,7 +93,7 @@ def main():
     logger.debug('[Info] embedding size: {}'.format(emb_size))
 
     # 建立模型
-    model = CSFMODEL(len(train_set.codebook['itow']), len(train_set.codebook['itoa']), emb_size)
+    model = CSFMODEL(len(train_set.codebook['itow']), len(train_set.codebook['itoa'])+1, emb_size)
 
     total_param = 0
     for param in model.parameters():  # Returns an iterator over module parameters
