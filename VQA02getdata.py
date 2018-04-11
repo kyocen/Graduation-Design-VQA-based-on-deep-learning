@@ -187,11 +187,12 @@ def encode_ans(data, atoi, split):#data：train_data
         if correct_index[i]==N:
             num_not_in_ans+=1
     print('{}/{} ({}%) correct answers in {} is not in candidate answers'.format(num_not_in_ans,len(data),100.0*num_not_in_ans/len(data),split))
+    correct_index = np.argmax(ans, axis=1)  # ndarray (bs,)
 
     print('[Debug] answer distribution')
     print("[ans size] ",ans.shape)
-    samples = random.sample(ans.tolist(), k=5)
-    print("[ans distribution] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
+    # samples = random.sample(ans.tolist(), k=5)
+    # print("[ans distribution] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
     # for s in samples:
     #     print(s)
 
@@ -200,6 +201,9 @@ def encode_ans(data, atoi, split):#data：train_data
     for s in samples:
         print(s)
 
+    # indexs = np.argmax(ans, axis=1)  # ndarray (bs,)
+    # right = list(map(lambda x, y: 1 if x == y else 0, indexs, correct_index)).count(1)
+    # print("{}/{} {:.2f} is right in candidate".format(right,correct_index.shape[0],100.0*right/correct_index.shape[0]))
     return ans, correct_index
 
 #返回image_id list

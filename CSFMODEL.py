@@ -79,6 +79,11 @@ class CSFMODEL(nn.Module):
         stdbn1 = list(stdModule.layer4.children())[2].bn1
         self.bn1.weight = nn.Parameter(list(stdbn1.parameters())[0].data.clone())
         self.bn1.bias = nn.Parameter(list(stdbn1.parameters())[1].data.clone())
+        if self.layers<3:
+            for param in list(self.conv1.parameters()):
+                param.requires_gard = False
+            for param in list(self.bn1.parameters()):
+                param.requires_gard=False
 
         stdconv2 = list(stdModule.layer4.children())[2].conv2
         self.conv2.weight = nn.Parameter(list(stdconv2.parameters())[0].data.clone())
@@ -86,6 +91,11 @@ class CSFMODEL(nn.Module):
         stdbn2 = list(stdModule.layer4.children())[2].bn2
         self.bn2.weight = nn.Parameter(list(stdbn2.parameters())[0].data.clone())
         self.bn2.bias = nn.Parameter(list(stdbn2.parameters())[1].data.clone())
+        if self.layers<2:
+            for param in list(self.conv2.parameters()):
+                param.requires_gard = False
+            for param in list(self.bn2.parameters()):
+                param.requires_gard=False
 
         stdconv3 = list(stdModule.layer4.children())[2].conv3
         self.conv3.weight = nn.Parameter(list(stdconv3.parameters())[0].data.clone())
@@ -93,6 +103,11 @@ class CSFMODEL(nn.Module):
         stdbn3 = list(stdModule.layer4.children())[2].bn3
         self.bn3.weight = nn.Parameter(list(stdbn3.parameters())[0].data.clone())
         self.bn3.bias = nn.Parameter(list(stdbn3.parameters())[1].data.clone())
+        if self.layers<1:
+            for param in list(self.conv3.parameters()):
+                param.requires_gard = False
+            for param in list(self.bn3.parameters()):
+                param.requires_gard=False
 
     def forward(self, que, img):  # img: [bs,2048,7,7] que: (bs,14)
 
@@ -112,7 +127,7 @@ class CSFMODEL(nn.Module):
 
         # first CSF
         # (bs,512,7,7) (bs,h_size) => (bs,512,7,7)
-        if self.layers>=1 :
+        if self.layers>=3 :
             img = self.csf1(img, h)
 
         # second conv
@@ -130,7 +145,7 @@ class CSFMODEL(nn.Module):
 
         # third CSF
         # (bs,2048,7,7) (bs,h_size) => (bs,2048,7,7)
-        if self.layers>=3 :
+        if self.layers>=1 :
             img = self.csf3(img, h)
 
         img = img + origin  # (bs,2048,7,7)
@@ -144,6 +159,3 @@ class CSFMODEL(nn.Module):
         score = self.pred_net(fuse)#(bs,3092)
         return score
 
-
-model = CSFMODEL(11898,3097)
-print("ok")

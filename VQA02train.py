@@ -34,7 +34,7 @@ parser.add_argument("-lr", type=float, action="store", help="learning rate", def
 parser.add_argument("-wd", type=float, action="store", help="weight decay", default=0)
 parser.add_argument("-epoch", type=int, action="store", help="epoch", default=50)
 parser.add_argument("-l", type=int, action="store", help="num of CSF layers", default=3)
-parser.add_argument("-e", type=float, action="store", help="extend for score", default=5.0)
+parser.add_argument("-e", type=float, action="store", help="extend for score", default=1.0)
 parser.add_argument('--print-freq', '-p', default=2000, type=int, metavar='N', help='print frequency (default: 1000)')
 
 args = parser.parse_args()
