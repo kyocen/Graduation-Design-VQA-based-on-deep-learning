@@ -24,22 +24,22 @@ class CSF(nn.Module):
         #c
         img_size=[*img.size()]#list [bs,C,7,7] C=512 or 2048
         img=img.view(img_size[0], img_size[1], img_size[2]*img_size[3])#(bs, C, H, W) => (bs, C, H*W) (bs, C, 49)
-        att = F.normalize(img, p=2, dim=1)#(bs, C, 49)已经是49个region的image attention feature,这里是feature vector内部normalize
+        img = F.normalize(img, p=2, dim=1)#(bs, C, 49)已经是49个region的image attention feature,这里是feature vector内部normalize
 
-        att=self.att_c_mfh(att,h)#(bs, C, 49), (bs,512) => (bs, C, o) o=2048 here
+        att=self.att_c_mfh(img,h)#(bs, C, 49), (bs,512) => (bs, C, o) o=2048 here
         att=self.att_c_net(att)#(bs, C, o) => (bs, C, 1)
 
-        att=att.squeeze(2).permute(1,0)#(bs, C, 1) => (bs, C) => (C, bs)
+        att=F.softmax(att,dim=1).squeeze(2).permute(1,0)#(bs, C, 1) => (bs, C) => (C, bs)
         img=img.permute(2,1,0)#(bs, C, 49) => (49, C, bs)
         img=img*att#(49, C, bs)*(C, bs) => (49, C, bs)
         img = img.permute(2, 0, 1)#(bs, 49, C)
 
         #s
-        att = F.normalize(img, p=2,dim=2)# (bs, 49, C)已经是49个region的image attention feature,这里是feature vector内部normalize
-        att=self.att_s_mfh(att,h)#(bs, 49, C), (bs,512) => (bs, 49, o) o=2048 here
+        img = F.normalize(img, p=2,dim=2)# (bs, 49, C)已经是49个region的image attention feature,这里是feature vector内部normalize
+        att=self.att_s_mfh(img,h)#(bs, 49, C), (bs,512) => (bs, 49, o) o=2048 here
         att=self.att_s_net(att)#(bs, 49, o) => (bs, 49, 1)
 
-        att=att.squeeze(2).permute(1,0)#(bs, 49, 1) => (bs, 49) => (49, bs)
+        att=F.softmax(att,dim=1).squeeze(2).permute(1,0)#(bs, 49, 1) => (bs, 49) => (49, bs)
         img=img.permute(2,1,0)#(bs, 49, C) => (C, 49, bs)
         img=img*att#(C, 49, bs)*(49, bs) => (C, 49, bs)
 
