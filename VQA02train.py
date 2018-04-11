@@ -224,7 +224,7 @@ def train(train_loader, model, criterion, optimizer, epoch,val_loader):
                     epoch, i, len(train_loader), batch_time=batch_time,
                     data_time=data_time, loss=losses))
 
-            validate(train_loader, model, criterion, epoch)
+            validate(val_loader, model, criterion, epoch)
     return losses.avg
 
 
