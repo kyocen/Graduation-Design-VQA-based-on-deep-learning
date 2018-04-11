@@ -18,6 +18,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
+import torch.nn.functional as F
 import progressbar
 import numpy as np
 from torch.autograd import Variable
@@ -123,9 +124,9 @@ def main():
     # 得到的答案为3196维，标准答案为vector，3196中每个都有一个score，相当于对每一个候选答案都做一个BCE，然后对所有维度做平均，再对整个batch做平均
     if torch.cuda.is_available():
         model.cuda()
-        criterion = nn.BCEWithLogitsLoss(size_average=False).cuda()
+        criterion = nn.BCELoss(size_average=False).cuda()
     else:
-        criterion = nn.BCEWithLogitsLoss(size_average=False)
+        criterion = nn.BCELoss(size_average=False)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.wd)
     # This flag allows you to enable the inbuilt cudnn auto-tuner to find the best algorithm to use for your hardware.
@@ -204,7 +205,7 @@ def train(train_loader, model, criterion, optimizer, epoch,val_loader):
         # [question [index of word] ndarray 1d, image feature  3d ndarray (2048,7,7),
         # 1d ndarray [score(float32) of N candidate answers for this question], #int64  correct answer index]
         score = model(*sample_var[:-1])  #que: (bs,14) img: [bs,2048,7,7]
-        loss = criterion(score, sample_var[-1])  # 虽然是处理一个batch，但loss是一个scalar，是batch内所有样本的loss的均值，但是是一个tensor
+        loss = criterion(score, F.softmax(sample_var[-1],dim=1))  # 虽然是处理一个batch，但loss是一个scalar，是batch内所有样本的loss的均值，但是是一个tensor
 
         losses.update(loss.data[0])  # loss.data和sample[0]都是tensor sample[0].size()会返回一个object，sample[0].size(0)会返回一个值
 

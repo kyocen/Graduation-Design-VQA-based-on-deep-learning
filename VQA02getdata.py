@@ -74,7 +74,7 @@ def main():
     # encode question
     # question index matrix and question_id matrix
     # 将question word matrix转为index matrix，每一行为一个问题，每一行中有14个数，question word的index向右靠齐，左边填0
-    train_que, train_que_id = encode_que(train_data, wtoi) #question index 2d-ndarray and question_id 1d-ndarray
+    train_que, train_que_id = encode_que(train_data, wtoi, itow) #question index 2d-ndarray and question_id 1d-ndarray
 
     #返回一个2d-ndarray，内有len(data)个1d-ndarray，每个内部1d-ndarray中为 所有候选answer(3196)的ground-truth score
     #返回一个1d-ndarray，分别是每个问题的correct answer在候选答案中对应的index，若没有在候选答案中则为最大的index+1
@@ -84,7 +84,7 @@ def main():
     # encode question
     # question index matrix and question_id matrix
     # 将question word matrix转为index matrix，每一行为一个问题，每一行中有14个数，question word的index向右靠齐，左边填0
-    val_que, val_que_id = encode_que(val_data, wtoi)#question index 2d-ndarray and question_id 1d-ndarray
+    val_que, val_que_id = encode_que(val_data, wtoi, itow)#question index 2d-ndarray and question_id 1d-ndarray
 
     #返回一个2d-ndarray，内有len(data)个1d-ndarray，每个内部1d-ndarray中为 所有候选answer(3196)的ground-truth score
     val_ans, val_correct = encode_ans(val_data, atoi, 'val2014')
@@ -130,7 +130,7 @@ def main():
 
 
 
-def encode_que(data, wtoi):#data：train_data
+def encode_que(data, wtoi, itow):#data：train_data
     N = len(data)
     question_id = np.zeros((N,), dtype='int64')#question_id matrix(N,)
     que = np.zeros((N, cfg.MAX_QUESTION_LEN), dtype='int64')#question matrix(N, cfg.MAX_QUESTION_LEN)
@@ -159,7 +159,7 @@ def encode_que(data, wtoi):#data：train_data
     print('[Debug] question index')
     samples = random.sample(que.tolist(), k=5)
     for s in samples:
-        print(s)
+        print(' '.join([itow[index] for index in s]))
 
     print('[Debug] question id')
     samples = random.sample(question_id.tolist(), k=5)

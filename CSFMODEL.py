@@ -55,10 +55,10 @@ class CSFMODEL(nn.Module):
 
         self.pred_mfh = MFH(x_size=1024, y_size=512, latent_dim=4, output_size=1024,
                             block_count=2)  # (batch_size,36,o) or (batch_size,o)
-        # self.pred_net = nn.Sequential(
-        #     nn.Linear(2048, num_ans),
-        #     nn.Sigmoid())
-        self.pred_net=nn.Linear(2048, num_ans)
+        self.pred_net = nn.Sequential(
+            nn.Linear(2048, num_ans),
+            nn.Softmax())
+        # self.pred_net=nn.Linear(2048, num_ans)
 
         # initialization
         # Returns an iterator over all modules in the network. Duplicate modules are returned only once.
