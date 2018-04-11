@@ -174,13 +174,12 @@ def encode_que(data, wtoi):#data：train_data
 #返回一个1d-ndarray，分别是每个问题的correct answer在候选答案中对应的index，若没有在候选答案中则为最大的index+1
 def encode_ans(data, atoi, split):#data：train_data
     #此时每个question都有多个答案，需要拟合答案的分布
-    ans = np.zeros((len(data), len(atoi)), dtype='float16')
+    ans = np.zeros((len(data), len(atoi)+1), dtype='float32')
     correct_index=np.zeros((len(data),), dtype='int64')
     # answers: [["net", 1.0], ["netting", 0.3], ["mesh", 0.3]]
     for i, answers in enumerate(map(itemgetter('answers'), data)):
         for answer, score in answers:
-            if answer in atoi:
-                ans[i][atoi.get(answer)] = score
+            ans[i][atoi.get(answer,len(atoi))] += score
     N=len(atoi)
     num_not_in_ans=0
     for i, correct in enumerate(map(itemgetter('correct'), data)):
@@ -190,9 +189,11 @@ def encode_ans(data, atoi, split):#data：train_data
     print('{}/{} ({}%) correct answers in {} is not in candidate answers'.format(num_not_in_ans,len(data),100.0*num_not_in_ans/len(data),split))
 
     print('[Debug] answer distribution')
+    print("[ans size] ",ans.shape)
     samples = random.sample(ans.tolist(), k=5)
-    for s in samples:
-        print(s)
+    print("[ans distribution] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
+    # for s in samples:
+    #     print(s)
 
     print('[Debug] correct index')
     samples = random.sample(correct_index.tolist(), k=5)
