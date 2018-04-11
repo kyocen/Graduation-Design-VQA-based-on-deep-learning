@@ -34,6 +34,7 @@ parser.add_argument("-lr", type=float, action="store", help="learning rate", def
 parser.add_argument("-wd", type=float, action="store", help="weight decay", default=0)
 parser.add_argument("-epoch", type=int, action="store", help="epoch", default=50)
 parser.add_argument("-l", type=int, action="store", help="num of CSF layers", default=3)
+parser.add_argument("-e", type=float, action="store", help="extend for score", default=5.0)
 parser.add_argument('--print-freq', '-p', default=2000, type=int, metavar='N', help='print frequency (default: 1000)')
 
 args = parser.parse_args()
@@ -70,7 +71,7 @@ def main():
     # data
     logger.debug('[Info] init dataset')
 
-    train_set = VQA02Dataset('train2014')
+    train_set = VQA02Dataset('train2014',args.e)
     # Data loader Combines a dataset and a sampler, and provides single- or multi-process iterators over the dataset.
     train_loader = torch.utils.data.DataLoader(
         train_set,
@@ -80,7 +81,7 @@ def main():
         pin_memory=True,
     )  # If True, the data loader will copy tensors into CUDA pinned memory before returning them
 
-    val_set = VQA02Dataset('val2014')
+    val_set = VQA02Dataset('val2014',args.e)
     val_loader = torch.utils.data.DataLoader(
         val_set,
         batch_size=BATCH_SIZE,
@@ -122,9 +123,9 @@ def main():
     # 得到的答案为3196维，标准答案为vector，3196中每个都有一个score，相当于对每一个候选答案都做一个BCE，然后对所有维度做平均，再对整个batch做平均
     if torch.cuda.is_available():
         model.cuda()
-        criterion = nn.BCEWithLogitsLoss().cuda()
+        criterion = nn.BCEWithLogitsLoss(size_average=False).cuda()
     else:
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss(size_average=False)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.wd)
     # This flag allows you to enable the inbuilt cudnn auto-tuner to find the best algorithm to use for your hardware.
@@ -140,7 +141,7 @@ def main():
     best_acc = 0.0
     best_epoch = -1
     for epoch in range(1, args.epoch + 1):  # 每一个epoch遍历所有batch
-        loss = train(train_loader, model, criterion, optimizer, epoch)
+        loss = train(train_loader, model, criterion, optimizer, epoch, val_loader)
         acc = validate(val_loader, model, criterion, epoch)  # 所有batch，所有样本的总和accuracy
         if acc > best_acc:
             is_best = True
@@ -182,7 +183,7 @@ def extract_embedding(filepath):
     return word_vec, embedding_size
 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch,val_loader):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -200,11 +201,12 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
         # input： # img: [bs,2048,7,7] que: (bs,14)
         # output：3092的1d vector
-        score = model(*sample_var[:-1])  # img: [bs,2048,7,7] que: (bs,14)
+        # [question [index of word] ndarray 1d, image feature  3d ndarray (2048,7,7),
+        # 1d ndarray [score(float32) of N candidate answers for this question], #int64  correct answer index]
+        score = model(*sample_var[:-1])  #que: (bs,14) img: [bs,2048,7,7]
         loss = criterion(score, sample_var[-1])  # 虽然是处理一个batch，但loss是一个scalar，是batch内所有样本的loss的均值，但是是一个tensor
 
-        losses.update(loss.data[0], sample[0].size(
-            0))  # loss.data和sample[0]都是tensor sample[0].size()会返回一个object，sample[0].size(0)会返回一个值
+        losses.update(loss.data[0])  # loss.data和sample[0]都是tensor sample[0].size()会返回一个object，sample[0].size(0)会返回一个值
 
         optimizer.zero_grad()
         loss.backward()
@@ -221,29 +223,34 @@ def train(train_loader, model, criterion, optimizer, epoch):
                 'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
                     epoch, i, len(train_loader), batch_time=batch_time,
                     data_time=data_time, loss=losses))
+
+            validate(train_loader, model, criterion, epoch)
     return losses.avg
 
 
 def validate(val_loader, model, criterion, epoch):
     model.eval()  # 调整到eval模式
 
-    results = []
-    bar = progressbar.ProgressBar()
     # sample: (question, img_feature, ans, correct)
     amount = 0
     right = 0
-    for i, sample in enumerate(val_loader, 1):
-        sample_var = [Variable(d).cuda() for d in
-                      list(sample)[0:3]]  # Variable list of iterator [iterator for img, que, [obj], ans]
+    bar=progressbar.ProgressBar()
+    for i, sample in enumerate(bar(val_loader), 1):
+        sample_var = [Variable(d).cuda() for d in list(sample)[0:3]]  # Variable list of iterator [iterator for img, que, [obj], ans]
         amount += sample[0].size(0)
         # input： # img: [bs,2048,7,7] que: (bs,14)
         # output：3097的1d vector(bs,3097)
         score = model(*sample_var[:-1])  # img: [bs,2048,7,7] que: (bs,14) #score is a Variable of the list of scores
-        _, indexs = torch.max(score.data, 1)#tensor (bs,)
-        correct_batch = list(map(lambda x, y: 0 if x == y else 1, indexs, sample[3])).count(0)
+        _, indexs = torch.max(score.data, dim=1)#tensor (bs,)
+        correct_batch = list(map(lambda x, y: 1 if x == y else 0, indexs, sample[3])).count(1)
         right += correct_batch
+        if i in [20,40,60,80,100]:
+            print("[size test] sample[0] size: {}\n score size {}\n indexs: {}\n sample[3] size: {}\n".format(sample[0].size(),score.size(),indexs,sample[3]))
+        if i==100:
+            break
     accuracy=100.0*float(right)/float(amount)
     print('[%5d] accuracy: %.3f' % (epoch, 100.0*float(right)/float(amount)))
+    model.train()
     return accuracy
 
 
