@@ -37,9 +37,10 @@ from config import cfg, get_feature_path
 #All other datasets should subclass it. All subclasses should override __len__, that provides the size of the dataset,
 # and __getitem__, supporting integer indexing in range from 0 to len(self) exclusive.
 class VQA02Dataset(Dataset):
-    def __init__(self,split,extend=1.0):# split in {'train2014', 'val2014'}
+    def __init__(self,split,extend=1.0,freq=False):# split in {'train2014', 'val2014'}
         print('[Load] raw data for {}'.format(split))
         self.extend=float(extend)
+        self.freq=freq
         self.codebook=json.load(open('../data/vqa02/codebook.json','r'))
         self.img_feature_path='../data/vqa02/{}_feature_2'.format(split)
         paired_data=h5py.File('../data/vqa02/{}-paired.h5'.format(split))[split[0:-4]]
@@ -85,7 +86,10 @@ class VQA02Dataset(Dataset):
         filename="%012d"%(self.img_id[i])+".npy"
         img_feature=np.load(os.path.join(self.img_feature_path,filename))
         item.append(img_feature)#image feature  3d ndarray (2048,7,7)
-        item.append(self.ans[i]*self.extend)#1d ndarray [score(float32) of N candidate answers for this question]
+        if self.freq:
+            item.append(self.ans_num[i])#1d ndarray [score(float32) of N candidate answers for this question]
+        else:
+            item.append(self.ans[i]*self.extend)#1d ndarray [score(float32) of N candidate answers for this question]
         item.append(self.correct_index[i])#int64  correct answer index
         return item
 

@@ -190,7 +190,6 @@ def encode_ans(data, atoi, split):#data：train_data
     for i, answers in enumerate(map(itemgetter('ans_num'), data)):
         for answer, appear in answers:
             ans_num[i][atoi.get(answer,len(atoi))] += appear
-        ans_num[i]=mysoftmax(ans_num[i])
 
     N=len(atoi)
     num_not_in_ans=0

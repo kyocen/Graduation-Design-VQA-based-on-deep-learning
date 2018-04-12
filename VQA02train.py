@@ -37,6 +37,7 @@ parser.add_argument("-wd", type=float, action="store", help="weight decay", defa
 parser.add_argument("-epoch", type=int, action="store", help="epoch", default=50)
 parser.add_argument("-l", type=int, action="store", help="num of CSF layers", default=3)
 parser.add_argument("-e", type=float, action="store", help="extend for score", default=1.0)
+parser.add_argument("-f",action="store_false",help="use freq in answer rather than grade")
 parser.add_argument('--print-freq', '-p', default=2000, type=int, metavar='N', help='print frequency (default: 1000)')
 
 args = parser.parse_args()
@@ -73,7 +74,7 @@ def main():
     # data
     logger.debug('[Info] init dataset')
 
-    train_set = VQA02Dataset('train2014',args.e)
+    train_set = VQA02Dataset('train2014',args.e,args.f)
     # Data loader Combines a dataset and a sampler, and provides single- or multi-process iterators over the dataset.
     train_loader = torch.utils.data.DataLoader(
         train_set,
@@ -83,7 +84,7 @@ def main():
         pin_memory=True,
     )  # If True, the data loader will copy tensors into CUDA pinned memory before returning them
 
-    val_set = VQA02Dataset('val2014',args.e)
+    val_set = VQA02Dataset('val2014',args.e,args.f)
     val_loader = torch.utils.data.DataLoader(
         val_set,
         batch_size=BATCH_SIZE,
