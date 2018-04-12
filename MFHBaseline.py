@@ -22,9 +22,9 @@ stdModule = resnet.resnet152(True)
 #print(list(list(stdModule.layer4.children())[0:-1]))
 
 
-class MFHMODEL(nn.Module):
+class MFHBaseline(nn.Module):
     def __init__(self, layers, num_words, num_ans, hidden_size=1024, emb_size=300, co_att=False, inplanes=512 * 4, planes=512, stride=1):
-        super(MFHMODEL, self).__init__()
+        super(MFHBaseline, self).__init__()
         self.layers=layers
         self.co_att=co_att
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
@@ -65,7 +65,7 @@ class MFHMODEL(nn.Module):
                 nn.Tanh(),
                 nn.Linear(512, 1))
 
-        self.pred_mfh = MFH(x_size=2048, y_size=cfg.NUM_QUESTION_GLIMPSE*hidden_size, latent_dim=4, output_size=1024,
+        self.pred_mfh = MFH(x_size=1024, y_size=cfg.NUM_QUESTION_GLIMPSE*hidden_size, latent_dim=4, output_size=1024,
                             block_count=2)  # (batch_size,36,o) or (batch_size,o)
         # self.pred_net = nn.Sequential(
         #     nn.Linear(2048, num_ans),
@@ -129,9 +129,9 @@ class MFHMODEL(nn.Module):
         emb = F.tanh(self.we(que))
         # (bs, 14,300)->(1, bs, 512) question vector 只取最后的H (num_layers * num_directions, batch_size, hidden_size) 所以要squeeze(dim=0)
         #qoutput  (batch, seq_len, hidden_size * num_directions)=(bs,14,1024)
-        #h=(hn,cn) h,c:(batch, num_layers * num_directions, hidden_size)=(bs,1,1024)
+        #h,c=hn hn:(2, num_layers * num_directions, batch, hidden_size) = (2,1,bs,1024)
         qouput, hn = self.lstm(emb)
-        h,c=hn#(1, bs, 1024)
+        h,_=hn#(1, bs, 1024)
 
         if not self.co_att:
             h = self.lstmdp1(h).squeeze(dim=0)  # (bs, 1024)
@@ -186,26 +186,12 @@ class MFHMODEL(nn.Module):
         img = img + origin  # (bs,2048,7,7)
         img = self.relu(img)  # (bs,2048,7,7)
 
-        img=img.view(img.size(0),img.size(1),-1).permute(0,2,1)# (bs,2048,7,7) => (bs,2048,49) => (bs,49,2048)
-        img_norm = F.normalize(img, p=2,dim=2)  # img(bs,49,2048),这里是feature vector内部normalize
-
-        #image feature and attention结合
-        # (batch_size,49,2048) (batch_size,512)->(batch_size,49,2048)->(batch_size,49,1)
-        att_w = self.att_net(self.att_mfh(img_norm, h))  # (batch_size,49,o) => (batch_size,49,1)
-        # (batch_size,36,1)->(36,batch_size,1)在36个box_weigh中做softmax normalize->(batch_size,1,36)
-        att_w_exp = F.softmax(att_w,dim=1).permute(0,2,1)  # (batch_size,49,1) => (bs,1,49)
-
-        # Performs a batch matrix-matrix product of matrices stored in batch1 and batch2. (batch_size,1,36)*(batch_size,36,2048)
-        # batch1 and batch2 must be 3-D tensors each containing the same number of matrices.
-        # If batch1 is a (b×n×m)tensor, batch2 is a (b×m×p)tensor, out will be a (b×n×p)tensor.
-        img_feature = torch.bmm(att_w_exp,img_norm)  # att_w_exp(batch_size,1,49) img_norm(batch_size,49,2048) ->(batch_size,1,2048) 加权和
-
-
-        # (batch_size,1,2048)
-        img_feature = img_feature.squeeze(1)  # (bs,2048)
+        img=self.avgpool(img)# (bs,2048,1,1)
+        img=img.view(img.size(0),-1)#(bs,2048)
+        img_feature=self.fc(img)#(bs,1024)
 
         #image feature and question feature 结合
-        fuse = self.pred_mfh(img_feature, h)  # (bs,2048) (bs,1024) => (bs,2048)
+        fuse = self.pred_mfh(img_feature, h)  # (bs,1024) (bs,1024) => (bs,2048)
         score = self.pred_net(fuse)#(bs,3098)
         score=F.softmax(score,dim=1)
         return score

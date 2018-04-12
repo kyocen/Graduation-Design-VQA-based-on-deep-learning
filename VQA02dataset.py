@@ -37,7 +37,7 @@ from config import cfg, get_feature_path
 #All other datasets should subclass it. All subclasses should override __len__, that provides the size of the dataset,
 # and __getitem__, supporting integer indexing in range from 0 to len(self) exclusive.
 class VQA02Dataset(Dataset):
-    def __init__(self,split,extend=5.0):# split in {'train2014', 'val2014'}
+    def __init__(self,split,extend=1.0):# split in {'train2014', 'val2014'}
         print('[Load] raw data for {}'.format(split))
         self.extend=float(extend)
         self.codebook=json.load(open('../data/vqa02/codebook.json','r'))
@@ -54,6 +54,7 @@ class VQA02Dataset(Dataset):
         #        [  0,   0,   0, ...,   9, 122,  24],
         #        [  0,   0,   0, ..., 118,  62,   6]])
         self.ans=paired_data['ans'].value.astype(np.float32)
+        self.ans_num=paired_data['ans_num'].value.astype(np.float32)
         self.correct_index=paired_data['correct'].value
         # print("que_id ",self.que_id.shape[0])
         # print("img_id ",self.img_id.shape[0])

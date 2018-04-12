@@ -129,7 +129,7 @@ class MFHMODEL(nn.Module):
         emb = F.tanh(self.we(que))
         # (bs, 14,300)->(1, bs, 512) question vector 只取最后的H (num_layers * num_directions, batch_size, hidden_size) 所以要squeeze(dim=0)
         #qoutput  (batch, seq_len, hidden_size * num_directions)=(bs,14,1024)
-        #h=(hn,cn) h,c:(batch, num_layers * num_directions, hidden_size)=(bs,1,1024)
+        #h,c=hn hn:(2, num_layers * num_directions, batch, hidden_size) = (2,1,bs,1024)
         qouput, hn = self.lstm(emb)
         h,c=hn#(1, bs, 1024)
 

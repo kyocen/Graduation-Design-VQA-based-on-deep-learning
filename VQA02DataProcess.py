@@ -15,6 +15,7 @@ from config import cfg
 # "image_id" : int,
 # "question" : [word],
 # "answers" : [tuple(answer,score)] 按照score降序
+# "ans_num" : [tuple(answer,appearance)] 按照appearance降序
 # "correct" : str
 # }
 def main():#加入了“answers”属性的list of question dict，answers属性为所有答案的降序list of tuple(answer,score of appearance)
@@ -78,7 +79,8 @@ def load_vqa_data(split):#split_name为文件名, VQA-COCO数据集中的打包
         for item in answers:
             item['answer']= norm_answer(item['answer'])#化简answer
 
-        ans_text = set(map(itemgetter('answer'), answers))  # 该question对应的所有答案的set
+        ans_text = set(map(itemgetter('answer'), answers))  # 该question对应的所有答案的set:set of answer
+
         ans_score = []#[(answer, score)]
         for at in ans_text:  # at为该question对应的所有答案之一
             accs = []
@@ -89,8 +91,13 @@ def load_vqa_data(split):#split_name为文件名, VQA-COCO数据集中的打包
             # 这些答案都是人标注的，出现次数越高，被认可越高，准确率越好，出现3次就算一定对，at和这个答案出现的次数（次数越大，sum(accs)/len(accs)越大）
             ans_score.append((at, sum(accs) / len(accs)))
         ans_score = sorted(ans_score, key=itemgetter(1), reverse=True)  # 根据准确率排序
+
+        ans_freq=Counter()
+        ans_freq.update(list(map(itemgetter('answer'), answers)))
+        q['ans_num']=ans_freq.most_common()
         q['answers'] = ans_score
         q['correct']=norm_answer(qid_anns.get(q['question_id']).get('multiple_choice_answer'))
+
     if cfg.DEBUG:
         print('[Debug] answers with score')
         ans=map(itemgetter('answers'), vqa_pair)#iterator of list of answer
@@ -105,11 +112,13 @@ def load_vqa_data(split):#split_name为文件名, VQA-COCO数据集中的打包
             print(s)
 
     return vqa_pair  # 加入了“answers”属性的list of question dict，answers属性为所有答案的降序list of tuple(answer,score)
+
 # question{
 # "question_id" : int,
 # "image_id" : int,
 # "question" : [word],
 # "answers" : [tuple(answer,score)] 按照score降序
+# "ans_num" : [tuple(answer,appearance)] 按照appearance降序
 # "correct" : str
 # }
 
