@@ -27,7 +27,11 @@ from torch.optim.lr_scheduler import *
 
 from VQA02dataset import VQA02Dataset
 from config import cfg, cfg_from_file, cfg_from_list
+
+from resnet import MyResNet,myresnet152
 from CSFMODEL import CSFMODEL
+from MFHMODEL import MFHMODEL
+from MFHBaseline import MFHBaseline
 
 parser = argparse.ArgumentParser(description="VQA")
 parser.add_argument("-gpu", type=int, action="store", help="gpu_index", default=1)
@@ -38,6 +42,7 @@ parser.add_argument("-epoch", type=int, action="store", help="epoch", default=50
 parser.add_argument("-l", type=int, action="store", help="num of CSF layers", default=3)
 parser.add_argument("-e", type=float, action="store", help="extend for score", default=1.0)
 parser.add_argument("-f",action="store_false",help="use freq in answer rather than grade")
+parser.add_argument("-m",type=str,nargs=1,choices=['c','m','b'],help="model",default='b')#c: CSFMODEL m: MFHMODEL b: MFHBaseline
 parser.add_argument('--print-freq', '-p', default=2000, type=int, metavar='N', help='print frequency (default: 1000)')
 
 args = parser.parse_args()
@@ -98,7 +103,13 @@ def main():
     logger.debug('[Info] embedding size: {}'.format(emb_size))
 
     # 建立模型
-    model = CSFMODEL(args.l, len(train_set.codebook['itow']), len(train_set.codebook['itoa'])+1, emb_size)
+    if args.m=='c':
+        model = CSFMODEL(args.l, len(train_set.codebook['itow']), len(train_set.codebook['itoa']) + 1, hidden_size=1024, emb_size=emb_size)
+    elif args.m=='m':
+        model = MFHMODEL(args.l, len(train_set.codebook['itow']), len(train_set.codebook['itoa']) + 1, hidden_size=1024, emb_size=emb_size,co_att=False)
+    else:
+        model = MFHBaseline(args.l, len(train_set.codebook['itow']), len(train_set.codebook['itoa']) + 1, hidden_size=1024, emb_size=emb_size, co_att=False)
+
 
     total_param = 0
     for param in model.parameters():  # Returns an iterator over module parameters
