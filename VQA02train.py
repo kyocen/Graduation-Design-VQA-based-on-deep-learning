@@ -23,6 +23,7 @@ import progressbar
 import numpy as np
 from torch.autograd import Variable
 from visdom import Visdom
+from torch.optim.lr_scheduler import *
 
 from VQA02dataset import VQA02Dataset
 from config import cfg, cfg_from_file, cfg_from_list
@@ -129,6 +130,7 @@ def main():
         criterion = nn.BCELoss(size_average=False)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.wd)
+    scheduler = StepLR(optimizer, step_size=4, gamma=0.5)
     # This flag allows you to enable the inbuilt cudnn auto-tuner to find the best algorithm to use for your hardware.
     # It enables benchmark mode in cudnn.
     # benchmark mode is good whenever your input sizes for your network do not vary.
@@ -142,6 +144,7 @@ def main():
     best_acc = 0.0
     best_epoch = -1
     for epoch in range(1, args.epoch + 1):  # 每一个epoch遍历所有batch
+        scheduler.step()
         loss = train(train_loader, model, criterion, optimizer, epoch, val_loader)
         acc = validate(val_loader, model, criterion, epoch)  # 所有batch，所有样本的总和accuracy
         if acc > best_acc:
