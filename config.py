@@ -42,6 +42,8 @@ __C.MIN_WORD_FREQ = 1
 # the question longer than that will be truncated
 __C.MAX_QUESTION_LEN = 14
 
+__C.NUM_QUESTION_GLIMPSE=1
+
 # Random seed
 __C.USE_RANDOM_SEED = True
 __C.SEED = 42

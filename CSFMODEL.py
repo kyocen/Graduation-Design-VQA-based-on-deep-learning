@@ -23,9 +23,9 @@ stdModule = resnet.resnet152(True)
 
 
 class CSFMODEL(nn.Module):
-    def __init__(self, layer, num_words, num_ans, emb_size=300, inplanes=512 * 4, planes=512, stride=1):
+    def __init__(self, layers, num_words, num_ans,  hidden_size=512, emb_size=300, inplanes=512 * 4, planes=512, stride=1):
         super(CSFMODEL, self).__init__()
-        self.layers=layer
+        self.layers=layers
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
 
@@ -39,22 +39,21 @@ class CSFMODEL(nn.Module):
         # 一开始的input是B x S, 但是Embedding S x B -> S x B x I，所以要先转置成S x B
         self.we = nn.Embedding(num_words, emb_size, padding_idx=0)
         self.gru = nn.GRU(input_size=emb_size,
-                          hidden_size=512,
+                          hidden_size=hidden_size,
                           num_layers=1,
                           batch_first=True)
         self.grudp = nn.Dropout(0.3)
 
         # CSF(img_size, h_size, latent_dim, output_size, block_count)  img_size=[C,H,W]
-        self.csf1 = CSF((512, 7, 7), 512, 4, 1024, 2)
-        self.csf2 = CSF((512, 7, 7), 512, 4, 1024, 2)
-        self.csf3 = CSF((2048, 7, 7), 512, 4, 1024, 2)
+        self.csf1 = CSF((512, 7, 7), hidden_size, 4, 1024, 2)
+        self.csf2 = CSF((512, 7, 7), hidden_size, 4, 1024, 2)
+        self.csf3 = CSF((2048, 7, 7), hidden_size, 4, 1024, 2)
 
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(7, stride=1)
-        self.fc = nn.Linear(512 * 4, 1024)
+        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.fc = nn.Linear(2048, 1024)
 
-        self.pred_mfh = MFH(x_size=1024, y_size=512, latent_dim=4, output_size=1024,
-                            block_count=2)  # (batch_size,36,o) or (batch_size,o)
+        self.pred_mfh = MFH(x_size=1024, y_size=hidden_size, latent_dim=4, output_size=1024,block_count=2)  # (batch_size,36,o) or (batch_size,o)
         # self.pred_net = nn.Sequential(
         #     nn.Linear(2048, num_ans),
         #     nn.Sigmoid(dim=1))
@@ -151,7 +150,7 @@ class CSFMODEL(nn.Module):
         img = img + origin  # (bs,2048,7,7)
         img = self.relu(img)  # (bs,2048,7,7)
 
-        img_feature = self.maxpool(img)  # (bs,2048,1,1)
+        img_feature = self.avgpool(img)  # (bs,2048,1,1)
         img_feature = img_feature.view(img_feature.size(0), -1)  # (bs,2048)
         img_feature = self.fc(img_feature)  # (bs,1024)
 
