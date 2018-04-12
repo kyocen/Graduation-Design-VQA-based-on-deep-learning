@@ -55,10 +55,10 @@ class CSFMODEL(nn.Module):
 
         self.pred_mfh = MFH(x_size=1024, y_size=512, latent_dim=4, output_size=1024,
                             block_count=2)  # (batch_size,36,o) or (batch_size,o)
-        self.pred_net = nn.Sequential(
-            nn.Linear(2048, num_ans),
-            nn.Softmax())
-        # self.pred_net=nn.Linear(2048, num_ans)
+        # self.pred_net = nn.Sequential(
+        #     nn.Linear(2048, num_ans),
+        #     nn.Sigmoid(dim=1))
+        self.pred_net=nn.Linear(2048, num_ans)
 
         # initialization
         # Returns an iterator over all modules in the network. Duplicate modules are returned only once.
@@ -157,5 +157,6 @@ class CSFMODEL(nn.Module):
 
         fuse = self.pred_mfh(img_feature, h)  # (bs,1024) (bs,512) => (bs,2048)
         score = self.pred_net(fuse)#(bs,3092)
+        score=F.softmax(score,dim=1)
         return score
 
