@@ -59,7 +59,7 @@ logger.setLevel(logging.DEBUG)  # 接收DEBUG即以上的log info
 
 
 def main():
-    fh = logging.FileHandler('./current.log')  # log info 输入到文件
+    fh = logging.FileHandler('./current_model_{}_freq_{}_layer_{}.log'.format(args.m,args.f,args.l))  # log info 输入到文件
     fh.setLevel(logging.DEBUG)
     sh = logging.StreamHandler(sys.stdout)  # log info 输入到屏幕
     sh.setLevel(logging.DEBUG)
