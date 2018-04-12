@@ -57,6 +57,7 @@ class VQA02Dataset(Dataset):
         self.ans=paired_data['ans'].value.astype(np.float32)
         self.ans_num=paired_data['ans_num'].value.astype(np.float32)
         self.correct_index=paired_data['correct'].value
+        self.freq_index=paired_data['freq'].value
         # print("que_id ",self.que_id.shape[0])
         # print("img_id ",self.img_id.shape[0])
         # print("que ",self.que.shape[0])
@@ -88,9 +89,10 @@ class VQA02Dataset(Dataset):
         item.append(img_feature)#image feature  3d ndarray (2048,7,7)
         if self.freq:
             item.append(self.ans_num[i])#1d ndarray [score(float32) of N candidate answers for this question]
+            item.append(self.freq_index[i])#int64  correct answer index
         else:
             item.append(self.ans[i]*self.extend)#1d ndarray [score(float32) of N candidate answers for this question]
-        item.append(self.correct_index[i])#int64  correct answer index
+            item.append(self.correct_index[i])#int64  correct answer index
         return item
 
     @property
