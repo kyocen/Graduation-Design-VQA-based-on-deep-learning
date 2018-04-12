@@ -37,7 +37,7 @@ from config import cfg, get_feature_path
 #All other datasets should subclass it. All subclasses should override __len__, that provides the size of the dataset,
 # and __getitem__, supporting integer indexing in range from 0 to len(self) exclusive.
 class VQA02Dataset(Dataset):
-    def __init__(self,split,extend=1.0,freq=False):# split in {'train2014', 'val2014'}
+    def __init__(self,split,extend=1.0,freq=0):# split in {'train2014', 'val2014'}
         print('[Load] raw data for {}'.format(split))
         self.extend=float(extend)
         self.freq=freq
