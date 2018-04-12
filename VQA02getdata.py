@@ -212,8 +212,8 @@ def encode_ans(data, atoi, split):#data：train_data
 
     print('[Debug] answer appearance')
     print("[ans size] ",ans_num.shape)
-    samples = random.sample(ans_num.tolist(), k=5)
-    print("[ans appearance] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
+    # samples = random.sample(ans_num.tolist(), k=5)
+    # print("[ans appearance] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
     # for s in samples:
     #     print(s)
 
@@ -227,8 +227,8 @@ def encode_ans(data, atoi, split):#data：train_data
     for s in samples:
         print(s)
 
-    inter=list(map(lambda x, y: 1 if x == y else 0, correct_index, freq_index)).count(1)
-    print("{}/{} {:.2f}% is different between correct_index and freq_index".format(inter, correct_index.shape[0], inter/correct_index.shape[0]))
+    differ=list(map(lambda x, y: 1 if x == y else 0, correct_index, freq_index)).count(0)
+    print("{}/{} {:.2f}% is different between correct_index and freq_index".format(differ, correct_index.shape[0], 100.0*differ/correct_index.shape[0]))
     # indexs = np.argmax(ans, axis=1)  # ndarray (bs,)
     # right = list(map(lambda x, y: 1 if x == y else 0, indexs, correct_index)).count(1)
     # print("{}/{} {:.2f} is right in candidate".format(right,correct_index.shape[0],100.0*right/correct_index.shape[0]))
