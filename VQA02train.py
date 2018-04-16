@@ -56,7 +56,7 @@ BATCH_SIZE = args.bs
 
 logger = logging.getLogger('vqa')  # logging name
 logger.setLevel(logging.DEBUG)  # 接收DEBUG即以上的log info
-
+#
 
 def main():
     fh = logging.FileHandler('./current_model_{}_freq_{}_layer_{}.log'.format(args.m,args.f,args.l))  # log info 输入到文件
