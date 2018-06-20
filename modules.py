@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+import math
 
 class CSF(nn.Module):
     def __init__(self, img_size, h_size, latent_dim, output_size, block_count):#img_size=[C,H,W]
@@ -24,7 +25,7 @@ class CSF(nn.Module):
         #c
         img_size=[*img.size()]#list [bs,C,7,7] C=512 or 2048
         img=img.view(img_size[0], img_size[1], img_size[2]*img_size[3])#(bs, C, H, W) => (bs, C, H*W) (bs, C, 49)
-        img = F.normalize(img, p=2, dim=1)#(bs, C, 49)已经是49个region的image attention feature,这里是feature vector内部normalize
+        img = F.normalize(img, p=2, dim=2)#(bs, C, 49)已经是49个region的image attention feature,这里是feature vector内部normalize
 
         att=self.att_c_mfh(img,h)#(bs, C, 49), (bs,512) => (bs, C, o) o=2048 here
         att=self.att_c_net(att)#(bs, C, o) => (bs, C, 1)
@@ -47,6 +48,89 @@ class CSF(nn.Module):
         img=img.view(*img_size)#(C, 49, bs) => (bs, C, 49) => (bs,C,7,7)
         return img
 
+class CS(nn.Module):
+    def __init__(self, img_size, h_size, k_size=512):#img_size=[C,H,W]
+        super(CS,self).__init__()
+
+        self.avgpool=nn.AvgPool1d(kernel_size=img_size[1]*img_size[2],stride=1)
+
+        #自定义参数 channel-wise attention
+        self.wc = nn.Parameter(torch.Tensor(k_size, 1), requires_grad=True) #(k,1)
+        self.bc = nn.Parameter(torch.Tensor(k_size, 1), requires_grad=True) #(k,1)
+        self.whc = nn.Parameter(torch.Tensor(k_size, h_size), requires_grad=True) #(k,h)
+        self.wci = nn.Parameter(torch.Tensor(1, k_size), requires_grad=True) #(1,k)
+        self.bci = nn.Parameter(torch.Tensor(1, 1), requires_grad=True) #(1,1)
+
+        #自定义参数 spacial-wise attention
+        self.ws = nn.Parameter(torch.Tensor(k_size, img_size[0]), requires_grad=True) #(k,C)
+        self.bs = nn.Parameter(torch.Tensor(k_size, 1), requires_grad=True) #(k,1)
+        self.whs = nn.Parameter(torch.Tensor(k_size, h_size), requires_grad=True) #(k,h)
+        self.wsi = nn.Parameter(torch.Tensor(1, k_size), requires_grad=True) #(1,k)
+        self.bsi = nn.Parameter(torch.Tensor(1, 1), requires_grad=True) #(1,1)
+
+        #initialization
+        self.init_parameters()
+
+    def init_parameters(self):
+        #init c
+        nn.init.xavier_uniform(self.wc)
+        nn.init.xavier_uniform(self.bc)
+        nn.init.xavier_uniform(self.whc)
+        nn.init.xavier_uniform(self.wci)
+        nn.init.xavier_uniform(self.bci)
+        #init s
+        nn.init.xavier_uniform(self.ws)
+        nn.init.xavier_uniform(self.bs)
+        nn.init.xavier_uniform(self.whs)
+        nn.init.xavier_uniform(self.wsi)
+        nn.init.xavier_uniform(self.bsi)
+
+
+    def forward(self,img,h):#(bs,C,7,7) (bs,h_size) => (bs,C,7,7)
+        #c
+        img_size=[*img.size()]#list [bs,C,7,7] C=512 or 2048
+        img=img.view(img_size[0], img_size[1], img_size[2]*img_size[3])#(bs, C, H, W) => (bs, C, H*W) (bs, C, 49)
+
+        #channel-wise attention
+        img_channel = F.normalize(img, p=2, dim=2)#(bs, C, 49)已经是49个region的image attention feature,这里是feature vector内部normalize
+
+        img_channel=self.avgpool(img_channel)#(bs, C, 49) => (bs, C, 1)
+        img_channel=img_channel.squeeze(2).unsqueeze(1)#(bs, C, 1) => (bs, C) => (bs, 1, C)
+
+        tmp1=torch.matmul(self.wc,img_channel)# (k,1)*(bs, 1, C)=>(bs, k, C)
+        tmp1=tmp1+self.bc#(bs, k, C)+ (k,1) => (bs, k, C)
+
+        tmp2=torch.matmul(self.whc,h.unsqueeze(2))#(bs, k, h) => (bs, h, 1) => (bs, k, 1)
+        tmp3=F.tanh(tmp1+tmp2)#(bs, k, C) + (bs, k, 1) = (bs, k, C)
+        tmp3 = torch.matmul(self.wci, tmp3).squeeze(1)  #(1,k) * (bs, k, C) => (bs, 1, C) => (bs, C)
+        tmp3= tmp3+self.bci #(bs, C) + (1,1) => (bs, C)
+        att=F.softmax(tmp3, dim=1)#(bs, C)
+
+        #channel-wise attention using
+        att = att.permute(1, 0)  #(bs, C) => (C, bs)
+        img = img.permute(2, 1, 0)  # (bs, C, 49) => (49, C, bs)
+        img = img * att  # (49, C, bs)*(C, bs) => (49, C, bs)
+        img = img.permute(2, 0, 1)  # (bs, 49, C)
+
+        #spacial-wise attention
+        img_spacial = F.normalize(img, p=2,dim=2).permute(0,2,1) # (bs, 49, C) => (bs, C, 49)已经是49个region的image attention feature,这里是feature vector内部normalize
+        tmp1 = torch.matmul(self.ws, img_spacial)  # (k,C)*(bs, C, 49)=>(bs, k, 49)
+        tmp1=tmp1+self.bs #(bs, k, 49) + (k,1) => (bs, k, 49)
+
+        tmp2 = torch.matmul(self.whs, h.unsqueeze(2))  # (bs, k, h) => (bs, h, 1) => (bs, k, 1)
+        tmp3=F.tanh(tmp1+tmp2)#(bs, k, 49) + (bs, k, 1) = (bs, k, 49)
+        tmp3 = torch.matmul(self.wsi, tmp3).squeeze(1)  #(1,k) * (bs, k, 49) => (bs, 1, 49) => (bs, 49)
+        tmp3= tmp3+self.bsi #(bs, 49) + (1,1) => (bs, 49)
+        att = F.softmax(tmp3, dim=1)  # (bs, 49)
+
+        #spacial-wise attention using
+        att = att.permute(1, 0)  #(bs, 49) => (49, bs)
+        img = img.permute(2, 1, 0)  # (bs, 49, C) => (C, 49, bs)
+        img = img * att  # (C, 49, bs)*(49, bs) => (C, 49, bs)
+
+        img=img.permute(2,0,1).contiguous()#(C, 49, bs)=>(bs, C, 49) view之前一定要把tensor的memory用contiguous()放在一起
+        img=img.view(*img_size)#(bs, C, 49) => (bs,C,7,7)
+        return img
 
 
 class MFH(nn.Module):# x为(batch_size,36,2048) or (batch_size,2048), y为(batch_size,2048) => (batch_size,36,o) or (batch_size,o)

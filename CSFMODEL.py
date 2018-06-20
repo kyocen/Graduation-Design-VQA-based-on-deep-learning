@@ -16,16 +16,18 @@ import numpy as np
 from PIL import Image
 import sys
 import resnet
-from modules import MFH, GatedTanh, CSF
+from modules import MFH, GatedTanh, CSF, CS
 
 stdModule = resnet.resnet152(True)
 #print(list(list(stdModule.layer4.children())[0:-1]))
 
-
+#CSFMODEL(args.l, args.s, args.g, len(train_set.codebook['itow']), len(train_set.codebook['itoa']) + 1, hidden_size=1024, emb_size=emb_size)
 class CSFMODEL(nn.Module):
-    def __init__(self, layers, num_words, num_ans,  hidden_size=512, emb_size=300, inplanes=512 * 4, planes=512, stride=1):
+    def __init__(self, use_gru, layers, submodel, grad, num_words, num_ans,  hidden_size=512, emb_size=300, inplanes=512 * 4, planes=512, stride=1):
         super(CSFMODEL, self).__init__()
         self.layers=layers
+        self.use_gru=use_gru
+
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
 
@@ -35,23 +37,34 @@ class CSFMODEL(nn.Module):
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
 
+        self.relu = nn.ReLU(inplace=True)
+        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.fc = nn.Linear(2048, 1024)
 
         # 一开始的input是B x S, 但是Embedding S x B -> S x B x I，所以要先转置成S x B
         self.we = nn.Embedding(num_words, emb_size, padding_idx=0)
+        self.lstm = nn.LSTM(input_size=emb_size,
+                          hidden_size=hidden_size,
+                          num_layers=1,
+                          batch_first=True)
+
         self.gru = nn.GRU(input_size=emb_size,
                           hidden_size=hidden_size,
                           num_layers=1,
                           batch_first=True)
-        self.grudp = nn.Dropout(0.3)
+        self.lstmdp = nn.Dropout(0.3)
 
         # CSF(img_size, h_size, latent_dim, output_size, block_count)  img_size=[C,H,W]
-        self.csf1 = CSF((512, 7, 7), hidden_size, 4, 1024, 2)
-        self.csf2 = CSF((512, 7, 7), hidden_size, 4, 1024, 2)
-        self.csf3 = CSF((2048, 7, 7), hidden_size, 4, 1024, 2)
+        if submodel=='csf':
+            self.csf1 = CSF((512, 7, 7), hidden_size, 4, 1024, 2)
+            self.csf2 = CSF((512, 7, 7), hidden_size, 4, 1024, 2)
+            self.csf3 = CSF((2048, 7, 7), hidden_size, 4, 1024, 2)
+        else:
+            #(self, img_size, h_size, k_size=512)
+            self.csf1 = CS((512, 7, 7), hidden_size, k_size=512)
+            self.csf2 = CS((512, 7, 7), hidden_size, k_size=512)
+            self.csf3 = CS((2048, 7, 7), hidden_size, k_size=512)
 
-        self.relu = nn.ReLU(inplace=True)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.fc = nn.Linear(2048, 1024)
 
         self.pred_mfh = MFH(x_size=1024, y_size=hidden_size, latent_dim=4, output_size=1024,block_count=2)  # (batch_size,36,o) or (batch_size,o)
         # self.pred_net = nn.Sequential(
@@ -78,11 +91,12 @@ class CSFMODEL(nn.Module):
         stdbn1 = list(stdModule.layer4.children())[2].bn1
         self.bn1.weight = nn.Parameter(list(stdbn1.parameters())[0].data.clone())
         self.bn1.bias = nn.Parameter(list(stdbn1.parameters())[1].data.clone())
-        if self.layers<3:
+
+        if not grad :
             for param in list(self.conv1.parameters()):
                 param.requires_gard = False
             for param in list(self.bn1.parameters()):
-                param.requires_gard=False
+                param.requires_gard = False
 
         stdconv2 = list(stdModule.layer4.children())[2].conv2
         self.conv2.weight = nn.Parameter(list(stdconv2.parameters())[0].data.clone())
@@ -90,11 +104,12 @@ class CSFMODEL(nn.Module):
         stdbn2 = list(stdModule.layer4.children())[2].bn2
         self.bn2.weight = nn.Parameter(list(stdbn2.parameters())[0].data.clone())
         self.bn2.bias = nn.Parameter(list(stdbn2.parameters())[1].data.clone())
-        if self.layers<2:
+
+        if (not grad) or (grad and layers<3 ) :
             for param in list(self.conv2.parameters()):
                 param.requires_gard = False
             for param in list(self.bn2.parameters()):
-                param.requires_gard=False
+                param.requires_gard = False
 
         stdconv3 = list(stdModule.layer4.children())[2].conv3
         self.conv3.weight = nn.Parameter(list(stdconv3.parameters())[0].data.clone())
@@ -102,11 +117,13 @@ class CSFMODEL(nn.Module):
         stdbn3 = list(stdModule.layer4.children())[2].bn3
         self.bn3.weight = nn.Parameter(list(stdbn3.parameters())[0].data.clone())
         self.bn3.bias = nn.Parameter(list(stdbn3.parameters())[1].data.clone())
-        if self.layers<1:
+
+        if (not grad) or (grad and layers<2) :
             for param in list(self.conv3.parameters()):
                 param.requires_gard = False
             for param in list(self.bn3.parameters()):
-                param.requires_gard=False
+                param.requires_gard = False
+
 
     def forward(self, que, img):  # img: [bs,2048,7,7] que: (bs,14)
 
@@ -114,8 +131,14 @@ class CSFMODEL(nn.Module):
         # (bs,14) => (bs,14,300) question为14个word index, list 1d length 14, 每次forward都只对一个batch #2d tensor
         emb = F.tanh(self.we(que))
         # (bs, 14,300)->(1, bs, 512) question vector 只取最后的H (num_layers * num_directions, batch_size, hidden_size) 所以要squeeze(dim=0)
-        _, h = self.gru(emb)
-        h = self.grudp(h).squeeze(dim=0)  # (bs, 512)
+
+        if not self.use_gru:
+            qouput, hn = self.lstm(emb)
+            h,_=hn#(1, bs, 1024)
+        else:
+            _,h = self.gru(emb)#(1, bs, 1024)
+
+        h = self.lstmdp(h).squeeze(dim=0)  # (bs, 512)
 
         # process image tensor
         origin = img.clone()
@@ -156,6 +179,5 @@ class CSFMODEL(nn.Module):
 
         fuse = self.pred_mfh(img_feature, h)  # (bs,1024) (bs,512) => (bs,2048)
         score = self.pred_net(fuse)#(bs,3092)
-        score=F.softmax(score,dim=1)
         return score
 

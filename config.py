@@ -13,10 +13,10 @@ cfg = __C
 __C.DEBUG = True
 
 # Path to data
-__C.DATA_DIR = 'data'
+__C.DATA_DIR = '../data/vqa02/'
 
 # Path to vqa tools
-__C.VQA_DIR = 'vqa-tools'
+__C.VQA_TOOL = 'vqa_tools'
 
 # Path to log files
 __C.LOG_DIR = 'log'

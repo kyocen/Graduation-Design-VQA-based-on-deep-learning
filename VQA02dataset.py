@@ -11,6 +11,7 @@ import progressbar
 from numpy.lib.format import open_memmap
 from torch.utils.data import Dataset
 import torch.utils.data
+
 from config import cfg, get_feature_path
 
 # # Save
@@ -41,28 +42,32 @@ class VQA02Dataset(Dataset):
         print('[Load] raw data for {}'.format(split))
         self.extend=float(extend)
         self.freq=freq
-        self.codebook=json.load(open('../data/vqa02/codebook.json','r'))
+        with open('../data/vqa02/codebook.json', 'r') as f:
+            self.codebook=json.load(f)
         self.img_feature_path='../data/vqa02/{}_feature_2'.format(split)
-        paired_data=h5py.File('../data/vqa02/{}-paired.h5'.format(split))[split[0:-4]]
-        self.que_id=paired_data['que_id'].value#np.arrray 1维 长774931 array([458752000, 458752001, 458752002, ...,    955086,955088,955097])
-        self.img_id=paired_data['img_id'].value
-        self.que=paired_data['que'].value#np.arrray 2维 (774931, 14)
-        # array([[  0,   0,   0, ...,  24, 103, 436],
-        #        [  0,   0,   0, ...,   9,  15,  80],
-        #        [  0,   0,   0, ...,   1, 260,  42],
-        #        ...,
-        #        [  0,   0,   0, ...,   2,   1,  47],
-        #        [  0,   0,   0, ...,   9, 122,  24],
-        #        [  0,   0,   0, ..., 118,  62,   6]])
-        self.ans=paired_data['ans'].value.astype(np.float32)
-        self.ans_num=paired_data['ans_num'].value.astype(np.float32)
-        self.correct_index=paired_data['correct'].value
-        self.freq_index=paired_data['freq'].value
-        # print("que_id ",self.que_id.shape[0])
-        # print("img_id ",self.img_id.shape[0])
-        # print("que ",self.que.shape[0])
-        # print("ans ",self.ans.shape[0])
-        # print("correct_index ",self.correct_index.shape[0])
+        with h5py.File('../data/vqa02/{}-paired.h5'.format(split)) as f:
+            paired_data = f[split[0:-4]]
+            # np.arrray 1维 长774931 array([458752000, 458752001, 458752002, ...,    955086,955088,955097])
+            self.que_id = paired_data['que_id'].value
+            self.img_id = paired_data['img_id'].value
+            self.que = paired_data['que'].value  # ndarray 2维 (774931, 14)
+            # array([[  0,   0,   0, ...,  24, 103, 436],
+            #        [  0,   0,   0, ...,   9,  15,  80],
+            #        [  0,   0,   0, ...,   1, 260,  42],
+            #        ...,
+            #        [  0,   0,   0, ...,   2,   1,  47],
+            #        [  0,   0,   0, ...,   9, 122,  24],
+            #        [  0,   0,   0, ..., 118,  62,   6]])
+            self.ans = paired_data['ans'].value.astype(np.float32) # ndarray 2维 (774931, 3097)
+            # print("que_id ",self.que_id.shape[0])
+            # print("img_id ",self.img_id.shape[0])
+            # print("que ",self.que.shape[0])
+            # print("ans ",self.ans.shape[0])
+            # print("correct_index ",self.correct_index.shape[0])
+        self.img_feature = h5py.File('../data/vqa02/{}_img_feature.h5'.format(split))
+        with open('../data/vqa02/{}_imgid_index.json'.format(split), 'r') as load_f:
+            self.imgid_index=json.load(load_f)
+
 
     def load_feature(self,dir):
         print('[Load] image feature in {}'.format(dir))
@@ -80,19 +85,18 @@ class VQA02Dataset(Dataset):
         return self.que_id.shape[0]
 
     # [question [index of word] ndarray 1d, image feature  3d ndarray (2048,7,7),
-    # 1d ndarray [score(float32) of N candidate answers for this question], #int64  correct answer index]
+    # 1d ndarray [score(float32) of N candidate answers for this question] ]
     def __getitem__(self, i):
         item=[]
+        item.append(self.que_id[i]) #question id int64
         item.append(self.que[i])#[index of word] ndarray 1d
-        filename="%012d"%(self.img_id[i])+".npy"
-        img_feature=np.load(os.path.join(self.img_feature_path,filename))
+        imgid=str(self.img_id[i])
+        img_index= self.imgid_index[imgid]
+        img_feature = self.img_feature['img'][img_index]
+        #print('[feature] {} :img_index {}'.format(i,img_index))
         item.append(img_feature)#image feature  3d ndarray (2048,7,7)
-        if self.freq:
-            item.append(self.ans_num[i])#1d ndarray [score(float32) of N candidate answers for this question]
-            item.append(self.freq_index[i])#int64  correct answer index
-        else:
-            item.append(self.ans[i]*self.extend)#1d ndarray [score(float32) of N candidate answers for this question]
-            item.append(self.correct_index[i])#int64  correct answer index
+        #del img_feature
+        item.append(self.ans[i])#1d ndarray [score(float32) of N candidate answers for this question]
         return item
 
     @property
@@ -102,7 +106,7 @@ class VQA02Dataset(Dataset):
     @property
     def num_ans(self):  # 只读属性
         return len(self.codebook['itoa'])
-
+#
 # BATCH_SIZE=10
 # train_set = VQA02Dataset('train2014')
 # # Data loader Combines a dataset and a sampler, and provides single- or multi-process iterators over the dataset.
@@ -113,6 +117,14 @@ class VQA02Dataset(Dataset):
 #         num_workers=2,
 #         pin_memory=True,
 #     )  # If True, the data loader will copy tensors into CUDA pinned memory before returning them
+#
+# dataiter=iter(train_set)
+# item=next(dataiter)
+# print("[size] size of item: ",len(item))
+# print("[size] size of question: ",item[0].shape)
+# print("[size] size of image feature: ",item[1].shape)
+# print("[size] size of answer: ",item[2].shape)
+
 #
 # val_set = VQA02Dataset('val2014')
 # val_loader = torch.utils.data.DataLoader(

@@ -16,17 +16,20 @@ import numpy as np
 from PIL import Image
 import sys
 import resnet
-from modules import MFH, GatedTanh, CSF
+from modules import MFH, GatedTanh, CSF, CS
 from config import cfg
 stdModule = resnet.resnet152(True)
 #print(list(list(stdModule.layer4.children())[0:-1]))
 
 
 class MFHMODEL(nn.Module):
-    def __init__(self, layers, num_words, num_ans, hidden_size=1024, emb_size=300, co_att=False, inplanes=512 * 4, planes=512, stride=1):
+    def __init__(self, use_gru, layers, submodel, grad, num_words, num_ans, hidden_size=1024, emb_size=300, co_att=False, inplanes=512 * 4, planes=512, stride=1):
         super(MFHMODEL, self).__init__()
         self.layers=layers
+        self.use_gru=use_gru
         self.co_att=co_att
+        print('[info] MFHMODEL grad:', grad)
+
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
 
@@ -46,6 +49,12 @@ class MFHMODEL(nn.Module):
                           hidden_size=hidden_size,
                           num_layers=1,
                           batch_first=True)
+
+        self.gru = nn.GRU(input_size=emb_size,
+                          hidden_size=hidden_size,
+                          num_layers=1,
+                          batch_first=True)
+
         self.lstmdp1 = nn.Dropout(0.3)
         self.lstmdp2 = nn.Dropout(0.3)
 
@@ -54,9 +63,16 @@ class MFHMODEL(nn.Module):
         self.Conv2_Qatt = nn.Conv2d(512, cfg.NUM_QUESTION_GLIMPSE, 1)
 
         # CSF(img_size, h_size, latent_dim, output_size, block_count)  img_size=[C,H,W]
-        self.csf1 = CSF((512, 7, 7), cfg.NUM_QUESTION_GLIMPSE*hidden_size, 4, 1024, 2)
-        self.csf2 = CSF((512, 7, 7), cfg.NUM_QUESTION_GLIMPSE*hidden_size, 4, 1024, 2)
-        self.csf3 = CSF((2048, 7, 7), cfg.NUM_QUESTION_GLIMPSE*hidden_size, 4, 1024, 2)
+        if submodel=='csf':
+            self.csf1 = CSF((512, 7, 7), cfg.NUM_QUESTION_GLIMPSE * hidden_size, 4, 1024, 2)
+            self.csf2 = CSF((512, 7, 7), cfg.NUM_QUESTION_GLIMPSE * hidden_size, 4, 1024, 2)
+            self.csf3 = CSF((2048, 7, 7), cfg.NUM_QUESTION_GLIMPSE * hidden_size, 4, 1024, 2)
+        else:
+            # (self, img_size, h_size, k_size=512)
+            self.csf1 = CS((512, 7, 7), cfg.NUM_QUESTION_GLIMPSE * hidden_size, k_size=512)
+            self.csf2 = CS((512, 7, 7), cfg.NUM_QUESTION_GLIMPSE * hidden_size, k_size=512)
+            self.csf3 = CS((2048, 7, 7), cfg.NUM_QUESTION_GLIMPSE * hidden_size, k_size=512)
+            
 
 
         self.att_mfh = MFH(2048, cfg.NUM_QUESTION_GLIMPSE*hidden_size, latent_dim=4, output_size=1024, block_count=2)#(batch_size,36,o) or (batch_size,o)
@@ -85,18 +101,18 @@ class MFHMODEL(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        #resnet最后三层的初始化。并决定要不要继续训练这3层
         stdconv1 = list(stdModule.layer4.children())[2].conv1
         self.conv1.weight = nn.Parameter(list(stdconv1.parameters())[0].data.clone())
 
         stdbn1 = list(stdModule.layer4.children())[2].bn1
         self.bn1.weight = nn.Parameter(list(stdbn1.parameters())[0].data.clone())
         self.bn1.bias = nn.Parameter(list(stdbn1.parameters())[1].data.clone())
-        if self.layers<3:
+
+        if not grad:
             for param in list(self.conv1.parameters()):
-                param.requires_gard = False
+                param.requires_grad = False
             for param in list(self.bn1.parameters()):
-                param.requires_gard=False
+                param.requires_grad = False
 
         stdconv2 = list(stdModule.layer4.children())[2].conv2
         self.conv2.weight = nn.Parameter(list(stdconv2.parameters())[0].data.clone())
@@ -104,11 +120,12 @@ class MFHMODEL(nn.Module):
         stdbn2 = list(stdModule.layer4.children())[2].bn2
         self.bn2.weight = nn.Parameter(list(stdbn2.parameters())[0].data.clone())
         self.bn2.bias = nn.Parameter(list(stdbn2.parameters())[1].data.clone())
-        if self.layers<2:
+
+        if (not grad) or (grad and layers < 3):
             for param in list(self.conv2.parameters()):
-                param.requires_gard = False
+                param.requires_grad = False
             for param in list(self.bn2.parameters()):
-                param.requires_gard=False
+                param.requires_grad = False
 
         stdconv3 = list(stdModule.layer4.children())[2].conv3
         self.conv3.weight = nn.Parameter(list(stdconv3.parameters())[0].data.clone())
@@ -116,11 +133,12 @@ class MFHMODEL(nn.Module):
         stdbn3 = list(stdModule.layer4.children())[2].bn3
         self.bn3.weight = nn.Parameter(list(stdbn3.parameters())[0].data.clone())
         self.bn3.bias = nn.Parameter(list(stdbn3.parameters())[1].data.clone())
-        if self.layers<1:
+
+        if (not grad) or (grad and layers < 2):
             for param in list(self.conv3.parameters()):
-                param.requires_gard = False
+                param.requires_grad = False
             for param in list(self.bn3.parameters()):
-                param.requires_gard=False
+                param.requires_grad = False
 
     def forward(self, que, img):  # img: [bs,2048,7,7] que: (bs,14)
 
@@ -130,12 +148,16 @@ class MFHMODEL(nn.Module):
         # (bs, 14,300)->(1, bs, 512) question vector 只取最后的H (num_layers * num_directions, batch_size, hidden_size) 所以要squeeze(dim=0)
         #qoutput  (batch, seq_len, hidden_size * num_directions)=(bs,14,1024)
         #h,c=hn hn:(2, num_layers * num_directions, batch, hidden_size) = (2,1,bs,1024)
-        qouput, hn = self.lstm(emb)
-        h,c=hn#(1, bs, 1024)
+
+        if not self.use_gru:
+            qouput, hn = self.lstm(emb)
+            h,_=hn#(1, bs, 1024)
+        else:
+            _,h = self.gru(emb)#(1, bs, 1024)
 
         if not self.co_att:
             h = self.lstmdp1(h).squeeze(dim=0)  # (bs, 1024)
-        else:
+        elif (not self.use_gru) and self.co_att:
             # question attention
             qouput=self.lstmdp2(qouput)  # (bs,14,1024)
             qouput = qouput.permute(0, 2, 1).unsqueeze(3)  # (bs,14,1024) => (bs,1024,14) => (bs,1024,14,1)
@@ -207,7 +229,6 @@ class MFHMODEL(nn.Module):
         #image feature and question feature 结合
         fuse = self.pred_mfh(img_feature, h)  # (bs,2048) (bs,1024) => (bs,2048)
         score = self.pred_net(fuse)#(bs,3098)
-        score=F.softmax(score,dim=1)
         return score
 
 

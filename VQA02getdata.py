@@ -77,9 +77,9 @@ def main():
     # 将question word matrix转为index matrix，每一行为一个问题，每一行中有14个数，question word的index向右靠齐，左边填0
     train_que, train_que_id = encode_que(train_data, wtoi, itow) #question index 2d-ndarray and question_id 1d-ndarray
 
-    #返回一个2d-ndarray，内有len(data)个1d-ndarray，每个内部1d-ndarray中为 所有候选answer(3196)的ground-truth score
+    #返回一个2d-ndarray，内有len(data)个1d-ndarray，每个内部1d-ndarray中为 所有候选answer(3097)的ground-truth score
     #返回一个1d-ndarray，分别是每个问题的correct answer在候选答案中对应的index，若没有在候选答案中则为最大的index+1
-    train_ans, train_ans_num, train_correct, train_freq_index = encode_ans(train_data, atoi, 'train2014')
+    train_ans = encode_ans(train_data, atoi, 'train2014')
     train_img_id=encode_image(train_data)
 
     # encode question
@@ -87,8 +87,8 @@ def main():
     # 将question word matrix转为index matrix，每一行为一个问题，每一行中有14个数，question word的index向右靠齐，左边填0
     val_que, val_que_id = encode_que(val_data, wtoi, itow)#question index 2d-ndarray and question_id 1d-ndarray
 
-    #返回一个2d-ndarray，内有len(data)个1d-ndarray，每个内部1d-ndarray中为 所有候选answer(3196)的ground-truth score
-    val_ans, val_ans_num, val_correct, val_freq_index = encode_ans(val_data, atoi, 'val2014')
+    #返回一个2d-ndarray，内有len(data)个1d-ndarray，每个内部1d-ndarray中为 所有候选answer(3096)的ground-truth score
+    val_ans = encode_ans(val_data, atoi, 'val2014')
     val_img_id=encode_image(val_data)
 
     # Save
@@ -110,15 +110,10 @@ def main():
         group.create_dataset('que', dtype='int64', data=train_que)
 
         group.create_dataset('ans', dtype='float32', data=train_ans)
-        group.create_dataset('ans_num', dtype='float32', data=train_ans_num)
-        group.create_dataset('correct', dtype='int64', data=train_correct)
-        group.create_dataset('freq', dtype='int64', data=train_freq_index)
         group.create_dataset('img_id', dtype='int64', data=train_img_id)
         # train_que中的每一行的question
         # 对应 train_que_id中同一行的question_id
         # 对应 train_ans中同一行的的答案分数分布
-        # 对应 train_num_ans中同一行的的答案次数分布
-        # 对应 train_correct中的correct answer index
         # 对应 train_image_id中同一行的image_id
 
     val_h5 = '../data/vqa02/val2014-paired.h5'
@@ -129,9 +124,6 @@ def main():
         group.create_dataset('que', dtype='int64', data=val_que)
 
         group.create_dataset('ans', dtype='float32', data=val_ans)
-        group.create_dataset('ans_num', dtype='float32', data=val_ans_num)
-        group.create_dataset('correct', dtype='int64', data=val_correct)
-        group.create_dataset('freq', dtype='int64', data=val_freq_index)
         group.create_dataset('img_id', dtype='int64', data=val_img_id)
 
 
@@ -180,59 +172,21 @@ def encode_que(data, wtoi, itow):#data：train_data
 #返回一个1d-ndarray，分别是每个问题的correct answer在候选答案中对应的index，若没有在候选答案中则为最大的index+1
 def encode_ans(data, atoi, split):#data：train_data
     #此时每个question都有多个答案，需要拟合答案的分布
-    ans = np.zeros((len(data), len(atoi)+1), dtype='float32')
-    ans_num=np.zeros((len(data), len(atoi)+1), dtype='float32')
-    correct_index=np.zeros((len(data),), dtype='int64')
-    freq_index=np.zeros((len(data),), dtype='int64')
     # answers: [["net", 1.0], ["netting", 0.3], ["mesh", 0.3]]
-    for i, answers in enumerate(map(itemgetter('answers'), data)):
+    ans = np.zeros((len(data), len(atoi)), dtype='float32')
+    for i, answers in enumerate(map(itemgetter('answers'), data)):  # answers: [["net", 1.0], ["netting", 0.3], ["mesh", 0.3]]
         for answer, score in answers:
-            ans[i][atoi.get(answer,len(atoi))] += score
+            if answer in atoi:
+                # 返回一个list，内有len(data)个list，每个内部list长度为len(atoi)
+                # 每一行内，该trn_data的这个dict对应的这一行中，这个dict中出现的答案的位置内容为该答案的分数，其他为0
+                ans[i][atoi.get(answer)] += score
 
-    # answers: [["net", 1.0], ["netting", 0.3], ["mesh", 0.3]]
-    for i, answers in enumerate(map(itemgetter('ans_num'), data)):
-        for answer, appear in answers:
-            ans_num[i][atoi.get(answer,len(atoi))] += appear
-
-    N=len(atoi)
-    num_not_in_ans=0
-    for i, correct in enumerate(map(itemgetter('correct'), data)):
-        correct_index[i]=atoi.get(correct,N)
-        if correct_index[i]==N:
-            num_not_in_ans+=1
-    print('{}/{} ({}%) correct answers in {} is not in candidate answers'.format(num_not_in_ans,len(data),100.0*num_not_in_ans/len(data),split))
-    correct_index = np.argmax(ans, axis=1)  # ndarray (bs,) # Only the first occurrence is returned.
-    freq_index = np.argmax(ans_num, axis=1)  # ndarray (bs,) # Only the first occurrence is returned.
     print('[Debug] answer distribution')
     print("[ans size] ",ans.shape)
-    # samples = random.sample(ans.tolist(), k=5)
-    # print("[ans distribution] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
-    # for s in samples:
-    #     print(s)
+    samples = random.sample(ans.tolist(), k=5)
+    print("[ans distribution] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
 
-    print('[Debug] answer appearance')
-    print("[ans size] ",ans_num.shape)
-    # samples = random.sample(ans_num.tolist(), k=5)
-    # print("[ans appearance] 5 ans sum: ",np.sum(samples,axis=1,dtype=np.float32))
-    # for s in samples:
-    #     print(s)
-
-    print('[Debug] correct index')
-    samples = random.sample(correct_index.tolist(), k=5)
-    for s in samples:
-        print(s)
-
-    print('[Debug] freq index')
-    samples = random.sample(freq_index.tolist(), k=5)
-    for s in samples:
-        print(s)
-
-    differ=list(map(lambda x, y: 1 if x == y else 0, correct_index, freq_index)).count(0)
-    print("{}/{} {:.2f}% is different between correct_index and freq_index".format(differ, correct_index.shape[0], 100.0*differ/correct_index.shape[0]))
-    # indexs = np.argmax(ans, axis=1)  # ndarray (bs,)
-    # right = list(map(lambda x, y: 1 if x == y else 0, indexs, correct_index)).count(1)
-    # print("{}/{} {:.2f} is right in candidate".format(right,correct_index.shape[0],100.0*right/correct_index.shape[0]))
-    return ans, ans_num, correct_index, freq_index
+    return ans
 
 #返回image_id list
 def encode_image(data):
